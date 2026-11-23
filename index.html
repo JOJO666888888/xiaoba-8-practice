@@ -33,6 +33,11 @@ button.btn.small{padding:6px 12px;font-size:13px}
 .opt.sel{border-color:var(--accent);background:#fdf2f3}
 .opt .letter{font-weight:700;min-width:20px}
 .opt.correct{border-color:var(--ok);background:#eef7f0}.opt.wrongsel{border-color:var(--bad);background:#fdecea}
+.opt.ro{cursor:default}
+.opt.ro:hover{border-color:var(--rule)}
+.opt.ro.correct:hover{border-color:var(--ok)}
+.opt.ro.wrongsel:hover{border-color:var(--bad)}
+.opt.ro.sel:hover{border-color:var(--accent)}
 .sticky{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:10;border-bottom:1px solid var(--rule)}
 .progress{height:8px;background:#eee;border-radius:99px;overflow:hidden;margin:8px 0}.progress>div{height:100%;background:var(--accent);width:0%}
 .flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}
@@ -368,6 +373,19 @@ document.getElementById('btnSubmit').addEventListener('click',()=>{
   showResult(att);
 });
 
+/* 复习用选项列表：只读展示每个选项的完整内容，正确答案绿色高亮、你选错的红色高亮 */
+function optionReviewHtml(q, yours, correct){
+  if(!q || !q.options) return '';
+  return '<div style="margin-top:8px">' + q.options.map((o,i)=>{
+    const L='ABCD'[i];
+    const sel = yours && yours.indexOf(L)>=0;
+    const ok = correct && correct.indexOf(L)>=0;
+    let cls='opt ro', tag='';
+    if(ok){ cls+=' correct'; tag='<span class="small" style="color:var(--ok);white-space:nowrap">'+(sel?'✓ 正确答案 · 你选了':'✓ 正确答案')+'</span>'; }
+    else if(sel){ if(correct){ cls+=' wrongsel'; tag='<span class="small" style="color:var(--bad);white-space:nowrap">✗ 你选了</span>'; } else { cls+=' sel'; tag='<span class="small" style="white-space:nowrap">你选了</span>'; } }
+    return '<div class="'+cls+'"><span class="letter">'+L+'.</span><span style="flex:1">'+esc(o)+'</span>'+tag+'</div>';
+  }).join('') + '</div>';
+}
 function showResult(att){
   showView('result');
   const card=document.getElementById('resultCard');
@@ -377,7 +395,10 @@ function showResult(att){
       : '<div class="score">'+att.score+' <span style="font-size:18px;color:var(--muted)">/ '+att.max+' 分</span></div><p>答对 '+att.correctCount+' / '+att.total+' 题 · 错 '+att.wrong.length+' 题'+(att.unanswered.length?' · 未答 '+att.unanswered.length+' 题':'')+'</p>')
     +(att.keyMissing && att.keyMissing.length && att.score!=null ? '<p class="small">注意：本题库有 '+att.keyMissing.length+' 题暂无答案，未计入判分。</p>':'');
   document.getElementById('wrongDetail').innerHTML = att.wrong.length
-    ? att.wrong.map(w=>'<div class="card"><strong>第 '+w.num+' 题</strong> '+(w.set?'（第'+CN[w.set-1]+'套）':'')+'<br><span class="muted">'+esc(w.stem)+'</span><br>你选：<strong style="color:var(--bad)">'+esc(w.yours)+'</strong>　正确答案：<strong style="color:var(--ok)">'+esc(w.correct)+'</strong>　得分 '+w.score+' / '+w.max+'</div>').join('')
+    ? att.wrong.map(w=>{
+      const q=w.set? qBy(w.set,w.num):null;
+      return '<div class="card"><strong>第 '+w.num+' 题</strong> '+(w.set?'（第'+CN[w.set-1]+'套）':'')+'<br><span class="muted">'+esc(w.stem)+'</span><br>你选：<strong style="color:var(--bad)">'+esc(w.yours)+'</strong>　正确答案：<strong style="color:var(--ok)">'+esc(w.correct)+'</strong>　得分 '+w.score+' / '+w.max+optionReviewHtml(q, w.yours, w.correct)+'</div>';
+    }).join('')
     : '<p class="muted">本次没有错题，全部答对或未判分。</p>';
   const qlist=att.qlist.map(id=>qBy(id.set,id.num)).filter(Boolean);
   document.getElementById('reviewList').innerHTML = qlist.map(q=>{
@@ -385,7 +406,7 @@ function showResult(att){
     let mark='';
     if(correct){ const s=scoreOne(q,yours,correct); mark = s===(q.type==='single'?1:2) ? '<span style="color:var(--ok)">✓ 对</span>' : '<span style="color:var(--bad)">✗ 错（'+s+'分）</span>'; }
     else mark='<span class="muted">未录答案</span>';
-    return '<div class="card"><strong>第 '+q.num+' 题</strong> '+mark+'<br><span class="muted">'+esc(q.stem)+'</span><br>你选：<strong>'+esc(yours||'未答')+'</strong>'+(correct?'　正确答案：<strong>'+esc(correct)+'</strong>':'')+'</div>';
+    return '<div class="card"><strong>第 '+q.num+' 题</strong> '+mark+'<br><span class="muted">'+esc(q.stem)+'</span><br>你选：<strong>'+esc(yours||'未答')+'</strong>'+(correct?'　正确答案：<strong>'+esc(correct)+'</strong>':'')+optionReviewHtml(q, yours, correct)+'</div>';
   }).join('');
   document.getElementById('btnBackHome').onclick=()=>showView('home');
   document.getElementById('btnGoHistory').onclick=()=>showView('history');
@@ -430,7 +451,7 @@ function renderWrong(){
   const wb=wrongBook();
   document.getElementById('wrongList').innerHTML = wb.length ? wb.map(w=>{
     const q=qBy(w.set,w.num);
-    return '<div class="card"><strong>第'+CN[w.set-1]+'套 第 '+w.num+' 题</strong><br><span class="muted">'+esc(q?q.stem:w.stem)+'</span><br>你选：<strong style="color:var(--bad)">'+esc(w.yours)+'</strong>　正确答案：<strong style="color:var(--ok)">'+esc(w.correct)+'</strong></div>';
+    return '<div class="card"><strong>第'+CN[w.set-1]+'套 第 '+w.num+' 题</strong><br><span class="muted">'+esc(q?q.stem:w.stem)+'</span><br>你选：<strong style="color:var(--bad)">'+esc(w.yours)+'</strong>　正确答案：<strong style="color:var(--ok)">'+esc(w.correct)+'</strong>'+(q?optionReviewHtml(q, w.yours, w.correct):'')+'</div>';
   }).join('') + '<button class="btn" id="btnWrong2">只练这些错题</button>' : '<p class="muted">暂无错题。</p>';
   const b=document.getElementById('btnWrong2'); if(b) b.onclick=startWrongPractice;
 }
